@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendario</title>
+    <!-- FullCalendar CSS local -->
+    <link href="/fullcalendar/index.global.css" rel="stylesheet">
+    <style>
+        /* Estilo para el formulario oculto inicialmente */
+        #eventFormContainer {
+            display: none;
+            margin-top: 20px;
+        }
+
+        /* Estilo para el cuadro de confirmación de eliminación */
+        .delete-button {
+            background-color: red;
+            color: white;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Mi Calendario</h1>
+    
+    <!-- Contenedor del calendario -->
+    <div id="calendar"></div>
+
+    <!-- Formulario para agregar eventos (oculto inicialmente) -->
+    <div id="eventFormContainer">
+        <h2>Agregar Evento</h2>
+        <form id="eventForm">
+            <label for="title">Título del Evento:</label>
+            <input type="text" id="title" required><br>
+
+            <label for="start">Fecha de inicio:</label>
+            <input type="date" id="start" required><br>
+
+            <label for="end">Fecha de fin:</label>
+            <input type="date" id="end"><br>
+
+            <button type="submit">Agregar Evento</button>
+            <button type="button" id="cancelButton">Cancelar</button>
+        </form>
+    </div>
+
+    <script src="/fullcalendar/index.global.min.js"></script>
+    <script>
+        let calendar;
+        const events = [];
+
+        // Inicializar el calendario
+        document.addEventListener('DOMContentLoaded', function () {
+            const calendarEl = document.getElementById('calendar');
+
+            // Cargar eventos desde el servidor (si aplica)
+            fetch('/api/events')
+                .then(response => response.json())
+                .then(data => {
+                    events.push(...data); // Cargar los eventos desde el servidor
+
+                    calendar = new FullCalendar.Calendar(calendarEl, {
+                        initialView: 'dayGridMonth',
+                        events: events,
+                        dateClick: function(info) {
+                            showEventForm(info.dateStr); // Mostrar formulario al hacer clic en un día
+                        },
+                        eventClick: function(info) {
+                            // Mostrar una opción para eliminar el evento
+                            if (confirm('¿Quieres eliminar este evento?')) {
+                                deleteEvent(info.event.id);
+                            }
+                        }
+                    });
+                    calendar.render();
+                });
+        });
+
+        // Función para mostrar el formulario con la fecha seleccionada
+        function showEventForm(date) {
+            const eventFormContainer = document.getElementById('eventFormContainer');
+            const startInput = document.getElementById('start');
+            const endInput = document.getElementById('end');
+
+            // Configurar las fechas en el formulario
+            startInput.value = date;
+            endInput.value = date;
+
+            // Mostrar el formulario
+            eventFormContainer.style.display = 'block';
+        }
+
+        // Cancelar la creación de un evento
+        document.getElementById('cancelButton').addEventListener('click', function () {
+            const eventFormContainer = document.getElementById('eventFormContainer');
+            eventFormContainer.style.display = 'none';
+        });
+
+        // Agregar evento al servidor y al calendario
+        document.getElementById('eventForm').addEventListener('submit', function (e) {
+            e.preventDefault(); // Prevenir el comportamiento por defecto del formulario
+
+            const title = document.getElementById('title').value;
+            const start = document.getElementById('start').value;
+            const end = document.getElementById('end').value || start; // Si no hay fecha de fin, poner la de inicio
+
+            // Agregar el evento al servidor
+            fetch('/api/events', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, start, end })
+            })
+            .then(response => response.json())
+            .then(data => {
+                events.push(data); // Agregar el evento a nuestro arreglo local
+                calendar.addEvent(data); // Agregarlo al calendario
+
+                // Limpiar el formulario y ocultarlo
+                document.getElementById('eventForm').reset();
+                document.getElementById('eventFormContainer').style.display = 'none';
+            })
+            .catch(err => console.error('Error al agregar el evento:', err));
+        });
+
+        // Función para eliminar un evento
+        function deleteEvent(eventId) {
+            fetch(`/api/events/${eventId}`, {
+                method: 'DELETE'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.message === 'Evento eliminado correctamente') {
+                    // Eliminar el evento del calendario
+                    const event = calendar.getEventById(eventId);
+                    event.remove();
+                }
+            })
+            .catch(err => {
+                console.error('Error al eliminar el evento:', err);
+            });
+        }
+    </script>
+</body>
+</html>
